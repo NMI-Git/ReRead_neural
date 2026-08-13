@@ -271,17 +271,17 @@ target word's unit above 0.9 with no other unit above it.
 
 | Corpus  | Errors     | Reaching 0.9  |
 |---------|------------|---------------|
-| `FIN`   | 0/14000    | 14000/14000   |
-| `FR`    | 0/13895    | 13895/13895   |
-| `FIRND` | 0/14000    | 13641/14000   |
+| `FIN`   | 0/14000    | 13993/14000   |
+| `FR`    | 0/13895    | 13889/13895   |
+| `FIRND` | 0/14000    | 5494/14000    |
 
 Nonword rejection (modes 2–5): false positives at ≥ 0.9, so **lower is better**.
 
 | Corpus  | 2 (RS)  | 3 (SRL) | 4 (DLS) | 5 (LT)   |
 |---------|---------|---------|---------|----------|
-| `FIN`   | 3/1000  | 0/1000  | 22/2000 | 867/2000 |
-| `FR`    | 5/1000  | 0/1000  | 37/1985 | 463/1985 |
-| `FIRND` | 0/1000  | 0/1000  | 1/2000  | 262/2000 |
+| `FIN`   | 0/1000  | 0/1000  | 6/2000  | 659/2000 |
+| `FR`    | 0/1000  | 0/1000  | 5/1985  | 248/1985 |
+| `FIRND` | 0/1000  | 0/1000  | 0/2000  | 29/2000  |
 
 Priming (modes 6–7): stimuli reaching ≥ 0.5 on the target's unit. What matters
 is the *contrast* within each pair — the paper predicts `1234` > `1357` and
@@ -289,9 +289,9 @@ is the *contrast* within each pair — the paper predicts `1234` > `1357` and
 
 | Corpus  | 6.1 (`1234`) | 6.2 (`1357`) | 7.1 (`1235467`) | 7.2 (`123DD67`) |
 |---------|--------------|--------------|-----------------|-----------------|
-| `FIN`   | 34/2000      | 10/2000      | 666/2000        | 285/2000        |
-| `FR`    | 60/1985      | 4/1985       | 745/1985        | 211/1985        |
-| `FIRND` | 0/2000       | 0/2000       | 751/2000        | 48/2000         |
+| `FIN`   | 15/2000      | 4/2000       | 519/2000        | 135/2000        |
+| `FR`    | 24/1985      | 2/1985       | 604/1985        | 98/1985         |
+| `FIRND` | 0/2000       | 0/2000       | 379/2000        | 1/2000          |
 
 `FIRND` shows no relative-position priming at all, which is the expected result
 for a control corpus: its strings are random, so a prime made of letters 1, 3, 5
@@ -299,13 +299,39 @@ and 7 carries no regularity the network could use to reconstruct the rest. It
 still shows transposed-letter priming, because a transposition preserves every
 letter of the string.
 
-Note that the `FIN` nonword counts are *higher* than those produced before the
-cost function was corrected, and this is an improvement rather than a
-regression. The previous Finnish model kept almost every activation below 0.9 —
-only 4% of its own training words reached the criterion — so a false-positive
-count of zero meant nothing had cleared the bar, not that words and nonwords
-were being told apart. Measured as separation between the two, letter
-transposition went from 2.9 to 56.7 percentage points.
+Comparing these counts against the ones this repository produced before the cost
+function was corrected needs care. The previous Finnish model kept almost every
+activation below 0.9 — only 4% of its own training words reached the criterion —
+so its false-positive count of zero recorded a dead scale, not discrimination.
+The meaningful quantity is the separation between real words and nonwords at the
+same threshold. On the hardest condition, letter transposition, Finnish went
+from 2.9 to 67.0 percentage points and French from 44.2 to 87.5.
+
+`FIRND` is the exception, and the reason is instructive. Its upper deck reaches
+the criterion at epoch 40 — random strings have no orthographic neighbours, so
+they are trivially separable at the lexical layer — but its lower deck never
+reaches it at all. Only 5494 of its patterns clear 0.9 end to end, and that
+shortfall is entirely attributable to the first deck. Training the upper deck
+longer would mask the problem rather than fix it.
+
+### Stopping criterion
+
+Training does not run for a fixed number of epochs. Following Dandurand et al.
+(2013) §2.5, each deck is trained "until they could correctly classify all
+training patterns" — every pattern with its target unit above 0.9 and every
+other unit below it. `--epochs` is a ceiling, not a target.
+
+| Corpus  | Lower deck        | Upper deck |
+|---------|-------------------|------------|
+| `FIN`   | epoch 421         | epoch 270  |
+| `FR`    | epoch 404         | epoch 279  |
+| `FIRND` | not reached (32.1% at 2000) | epoch 40 |
+
+The paper also reports the SSE values *its* networks showed on reaching the
+criterion (100 for both decks of a two-deck network). That figure is specific to
+their simulator, initialisation and corpus, and is not used here as a stopping
+condition: our decks reach the criterion at a very different SSE, and `FIRND`
+never approaches 100 at all.
 
 ### Internal representation analysis
 

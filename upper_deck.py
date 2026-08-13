@@ -32,6 +32,7 @@ from keras.utils import to_categorical
 
 import config
 import losses
+import stopping
 
 tf.keras.utils.set_random_seed(24)
 np.set_printoptions(threshold=np.inf)
@@ -72,7 +73,9 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     config.add_corpus_argument(parser)
     parser.add_argument('--epochs', type=int, default=DEFAULT_EPOCHS,
-                        help='Training epochs.')
+                        help='Maximum training epochs. Training normally stops '
+                             'earlier, when every training pattern is '
+                             'correctly classified.')
     args = parser.parse_args()
     corpus = config.get(args.corpus)
 
@@ -95,9 +98,12 @@ def main():
     # Dandurand et al. (2013) S2.5 specifies.
     inputs = config.encode_words(words, mapping, vocab_size)
 
-    labels = config.load_doc(corpus.upper_deck_labels).split()
-    lexicon_size = len(set(labels))
-    targets = to_categorical(np.array(labels), lexicon_size)
+    # Integers, not the raw strings: the stopping criterion uses these to index
+    # each pattern's own lexical unit.
+    labels = np.array(config.load_doc(corpus.upper_deck_labels).split(),
+                      dtype=int)
+    lexicon_size = len(set(labels.tolist()))
+    targets = to_categorical(labels, lexicon_size)
 
     if len(words) != len(labels):
         raise SystemExit(
@@ -115,7 +121,13 @@ def main():
 
     model = build_model(word_length, vocab_size, lexicon_size)
     model.summary()
-    model.fit(inputs, targets, epochs=args.epochs)
+
+    # The paper's criterion applies directly here: the target word's lexical
+    # unit above 0.9 with every other unit below it. See stopping.py.
+    criterion = stopping.CriterionStopping(inputs, labels, 'lexical')
+
+    model.fit(inputs, targets, epochs=args.epochs, callbacks=[criterion])
+    print(criterion.summary(args.epochs))
 
     loss, accuracy = model.evaluate(inputs, targets, batch_size=128)
     print('training-set loss: {:.6f}  accuracy: {:.6f}'.format(loss, accuracy))

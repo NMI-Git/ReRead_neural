@@ -31,6 +31,7 @@ import tensorflow as tf
 
 import config
 import losses
+import stopping
 import weight_multiplier
 
 # Fixed seed so that a retrained model reproduces the published one.
@@ -83,7 +84,9 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     config.add_corpus_argument(parser)
     parser.add_argument('--epochs', type=int, default=DEFAULT_EPOCHS,
-                        help='Training epochs.')
+                        help='Maximum training epochs. Training normally stops '
+                             'earlier, when every training pattern is '
+                             'correctly classified.')
     args = parser.parse_args()
     corpus = config.get(args.corpus)
 
@@ -122,7 +125,17 @@ def main():
 
     model = build_model(window_length, vocab_size)
     model.summary()
-    model.fit(weighted_inputs, flattened_targets, epochs=args.epochs)
+
+    # Dandurand et al. (2013) train "until they could correctly classify all
+    # training patterns", not for a fixed number of epochs. See stopping.py.
+    target_letters = np.array(
+        [[mapping[char] for char in word] for word in target_words])
+    criterion = stopping.CriterionStopping(
+        weighted_inputs, target_letters, 'letters', vocab_size=vocab_size)
+
+    model.fit(weighted_inputs, flattened_targets, epochs=args.epochs,
+              callbacks=[criterion])
+    print(criterion.summary(args.epochs))
 
     model.save(config.PROJECT_ROOT / corpus.lower_deck_model)
     with open(config.PROJECT_ROOT / corpus.lower_deck_mapping, 'wb') as handle:
