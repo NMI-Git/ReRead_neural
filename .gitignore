@@ -1,36 +1,29 @@
+# --- OS / editor / interpreter noise ---
 .DS_Store
-localTesting.py
+.idea/
+*.iml
 *.xml
-lstm_auto_enc.h5
-mapping.pkl
-load_model.py
-char_sequences.txt
-positional_corpus.rtf
 *__pycache__
-char_seq.py
+
+# --- Per-run output dumps ---
+# These are overwritten on every run and would otherwise produce noisy diffs.
+# analysis.txt is kept in version control as a worked example of mode 1 output.
 outfile.txt
 french_analysis.txt
 finnish_analysis.txt
-*.iml
-/testbed_lower_deck.py
-/testbed_input_modding.py
-/testbed_lower_deck_inputs.txt
-/testbed_target_words.py
-/testbed_target_words.txt
-/euclidean_distance.py
-/euclidean_calculations.csv
-/letter_category_effect.py
-/proximity_effect.csv
-/activation_vectors.csv
-/clustering_effect.csv
-/fin_random_euclidean_calculations.csv
-/fin_random_lower_deck.h5
-/fin_random_lower_deck_mapping.pkl
-/fin_random_positional_supervised_corpus.txt
-/fin_random_two_deck_target_words.txt
-/fin_random_upper_deck.h5
-/fin_random_upper_deck_mapping.pkl
-/finnish_random_labels.txt
-/finnish_random_upper_deck_labels.txt
-fin_random_proximity_effect.csv
-fin_random_clustering_effect.csv
+
+# --- Superseded exploratory scripts from the initial tutorial phase (2023-03) ---
+# Predate the two-deck architecture and are not part of any published result.
+localTesting.py
+load_model.py
+char_seq.py
+char_sequences.txt
+lstm_auto_enc.h5
+mapping.pkl
+positional_corpus.rtf
+
+# NOTE: Everything required to run the model and reproduce the published
+# analyses is deliberately tracked -- source corpora (corpora/), derived
+# training data, trained models (*.h5), char mappings (*.pkl) and the
+# analysis scripts. Do not add those back here; a clone must be runnable
+# as-is. See README.md "Reproducing the published analyses".

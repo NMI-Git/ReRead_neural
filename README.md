@@ -1,87 +1,442 @@
 # reread_neural
-## Neural Network for ReRead project
 
-### Synopsis
+## Neural network for the ReRead project
 
-First iterations are based on the work of [Dandurand et al. (2013)](https://www.tandfonline.com/doi/pdf/10.1080/09540091.2013.801934).  
-This project aims first to develop a neural network implementation of the dual-stage view on visual word recognition 
-(Hautala et al., 2021) and then to extend this model into continuous reading. This later goal will be enabled by 
-implementing mechanisms of preview processing of upcoming word and forward shift in text input simulating forward saccade
-length in reading. The architecture of the neural network for visual word recognition is expected to take a form of a 
-hybrid autoencoder consisting of parallel processing encoding layers simulating orthographic processing and followed by
-recurrent decoding processing layers simulating phonological decoding. The design of encoder network is based on earlier
-work by Dandurand et al. (2013) and the design of decoding network is based on earlier work by Sibley et al. (2012). 
-The architecture of the planned continuous reading model will build on theoretical understanding provided by existing 
-integrative models (Snell et al., 2018; Li & Pollatsek, 2020) combining connectionist visual word recognition modules 
-with eye movement control modules.  
+A connectionist model of visual word recognition, implemented in Keras. The
+model recognises a written word regardless of where it falls in the visual
+field, and reports how confidently it identifies it.
 
-The programming work will be conducted by relying on Keras -application programming 
-interface for deep learning in Python -programming language. The work has been funded by grant 317030 from 
-Academy of Finland to Jarkko Hautala. The site of the work is Niilo Mäki Institute, Jyväskylä, Finland. The programming 
-work will be conducted by Kiril Khalil under supervision of Jarkko Hautala, and the team from the Faculty of Information
-Technology at University of Jyväskylä consisting of Paavo Nieminen, Mirka Saarela and Tommi Kärkkäinen.
+---
 
-------------------------------------------------------------------------- 
--------------------------------------------------------------------------
+## Quick start
 
-#### For more information:  
+```bash
+conda env create -f environment.yml
+conda activate reread
 
-Hautala, J., Hawelka, S., & Aro, M. (2021). Dual-stage and dual-deficit? Word recognition processes during text reading 
-across the reading fluency continuum. Reading and Writing, 1-24. https://doi.org/10.1007/s11145-021-10201-1
+python two_deck.py --corpus FIN --mode 1
+```
 
-Dandurand, F., Hannagan, T., & Grainger, J. (2013). Computational models of location-invariant orthographic processing. 
-Connection Science, 25(1), 1-26.
+That runs the pre-trained Finnish model over its whole vocabulary and prints a
+recognition error count. Nothing needs training first: the trained models, the
+vocabularies and all derived data files are in this repository. Expect it to
+finish in a few seconds.
 
-Sibley, D. E., & Kello, C. T. (2012). Learned Orthographic Representations Facilitates Large-Scale Modeling of Word 
-Recognition. In Visual Word Recognition Volume 1 (pp. 28-51). Psychology Press.
+---
 
-Snell, J., van Leipsig, S., Grainger, J., & Meeter, M. (2018). OB1-reader: A model of word recognition and eye movements
-in text reading. Psychological review, 125(6), 969.
+## Synopsis
 
-Li, X., & Pollatsek, A. (2020). An integrated model of word processing and eye-movement control during Chinese reading. 
-Psychological Review, 127(6), 1139.
+First iterations are based on the work of
+[Dandurand et al. (2013)](https://www.tandfonline.com/doi/pdf/10.1080/09540091.2013.801934).
+This project aims first to develop a neural network implementation of the
+dual-stage view on visual word recognition (Hautala et al., 2021) and then to
+extend this model into continuous reading. This later goal will be enabled by
+implementing mechanisms of preview processing of upcoming word and forward shift
+in text input simulating forward saccade length in reading. The architecture of
+the neural network for visual word recognition is expected to take a form of a
+hybrid autoencoder consisting of parallel processing encoding layers simulating
+orthographic processing and followed by recurrent decoding processing layers
+simulating phonological decoding. The design of encoder network is based on
+earlier work by Dandurand et al. (2013) and the design of decoding network is
+based on earlier work by Sibley et al. (2012). The architecture of the planned
+continuous reading model will build on theoretical understanding provided by
+existing integrative models (Snell et al., 2018; Li & Pollatsek, 2020) combining
+connectionist visual word recognition modules with eye movement control modules.
 
-------------------------------------------------------------------------- 
--------------------------------------------------------------------------
+The work has been funded by grant 317030 from the Academy of Finland to Jarkko
+Hautala. The site of the work is Niilo Mäki Institute, Jyväskylä, Finland. The
+programming work is conducted by Kiril Khalil under supervision of Jarkko
+Hautala, and the team from the Faculty of Information Technology at University of
+Jyväskylä consisting of Paavo Nieminen, Mirka Saarela and Tommi Kärkkäinen.
 
-### Implementation
+---
 
-Requirements:  
+## How the model works
 
-- Python 3.9.5   
-- TensorFlow 2.11.0 (Keras should be bundled in the TF installation if not then Keras is required to be installed).
-Recommend using Anaconda or Miniconda to handle TF installation process.  
-- NumPy 1.24
-- pydot 1.4.2
-- Graphviz 9.0.0
+The model has two stages, referred to throughout the code as the **lower deck**
+and the **upper deck**.
 
-------------------------------------------------------------------------- 
--------------------------------------------------------------------------
+```
+   ###aaltola###          aaltola              unit #42 = 0.97
+  ---------------      ------------          ----------------
+   padded input   -->   lower deck    -->      upper deck
+   13 slots             word-centred           one unit per
+                        orthography            lexical entry
+```
 
-### Usage  
+**Lower deck — location-invariant orthographic encoding.** A 7-letter word is
+placed at one of 7 positions in a 13-slot input window, the unused slots filled
+with `#`. The network must output the same word-centred representation for all 7
+placements, which is what forces the hidden layer to encode letter identity
+independently of retinal position. This replicates Dandurand et al. (2013).
 
-- 03.04.2023: Usage requires a corpus/library of words in a text file with each word being the same length with no 
-special characters (including ä, ö , å). This is read as the input data. Working example to run is: 'zero_deck.py' for
-the zero deck example.
-- 24.04.2023: Current working script is: 'one_deck.py' and the required inputs are provided. 
-'positional_supervised_corpus.rtf' for inputs and 'labels.rtf' for target outputs. You can make your own similar data
-by using the: 'mod_inputs.py' -file to create inputs and target outputs from a corpus with the restrictions mentioned
-in the 03.04.2023 entry.
-- 12.05.2023: When the file 'two_deck.py' is run it saves the trained model as 'lower_deck.h5' and the mapping used as
-'lower_deck_mapping.pkl'. After training you can evaluate the outputs of the lower part of the 'two-deck-topology' by
-running the file 'lower_deck_evaluation.py' and changing the test input accordingly (or feeding a list of inputs).
-- 30.05.2023: Relevant files are now: 'lower_deck.py', 'upper_deck.py' and 'two_deck.py'. The first and second handle
-training of the two separate 'decks' in the model and the last one is the actual prediction model where data flows 
-from the lower to upper deck and produces a lexical representation output.
-- 20.06.2023: Replication of Dandurand et. al. (2013) two stage model complete. Runnable file is 'two_deck.py'.
-Model, mapping and lexicon files are required to run properly.
-- 30.08.2023: Replication of Dandurand et. al. (2013) test cases (chapters 3 & 4).
-- 05.09.2023: Working implementation of two deck with Finnish corpus.
+**Upper deck — lexical identification.** Takes the word-centred letters and
+activates one localist unit per lexicon entry. The *activation value* of the
+winning unit, not merely which unit wins, is the measure the test batteries
+report: a familiar word should drive its unit close to 1, while a nonword or a
+distorted word should not.
 
-------------------------------------------------------------------------- 
--------------------------------------------------------------------------
+**Fixation weighting.** Before entering the lower deck, each letter is scaled by
+a visual acuity gradient that depends on which letter falls on the fixation
+point (the centre of the window). This is the project's extension beyond
+Dandurand et al.; see the module docstring in `weight_multiplier.py` for the
+gradients and what they encode.
 
-### Project evolution
+---
+
+## Requirements
+
+Verified 2026-08-10 on macOS 15 / Apple M2 (arm64), Python 3.9.
+
+- Python 3.9
+- TensorFlow 2.11.0 — bundles Keras 2.11. **Keras 3 cannot load the `.h5`
+  models in this repository**, so do not upgrade past TensorFlow 2.15.
+- NumPy 1.24.4
+- scikit-learn 1.3.2 (only for `letter_category_effect.py`)
+
+Install with either:
+
+```bash
+conda env create -f environment.yml && conda activate reread   # recommended
+python -m pip install -r requirements.txt                      # existing env
+```
+
+On Apple Silicon the TensorFlow 2.11 package is published as `tensorflow-macos`
+rather than `tensorflow`; `requirements.txt` selects the right one
+automatically via environment markers.
+
+`pydot`, `visualkeras` and Graphviz are **not** required. They are needed only
+by the optional `plot_models.py`, which regenerates the architecture diagrams.
+
+---
+
+## Step-by-step guide
+
+Two routes through the project. **Route A** runs the models that ship with the
+repository and is what you want to check the published results. **Route B**
+rebuilds everything from a raw vocabulary, and is what you want to train the
+model on a new language.
+
+Timings are for a 2000-word vocabulary on an Apple M2.
+
+### Route A — run the shipped models (about 2 minutes)
+
+**1. Create and activate the environment.**
+
+```bash
+conda env create -f environment.yml
+conda activate reread
+```
+
+If you would rather use an existing interpreter, `python -m pip install -r
+requirements.txt` into a Python 3.9 environment does the same job. Verify with:
+
+```bash
+python -c "import tensorflow as tf; print(tf.__version__)"   # expect 2.11.0
+```
+
+**2. Run the model over a whole corpus.**
+
+```bash
+python two_deck.py --corpus FIN --mode 1
+```
+
+Takes a few seconds and prints a recognition error count. Compare it against the
+table in "Reproducing the published analyses" below — `FIN` should report
+518 errors out of 14000.
+
+**3. Run any of the test batteries.**
+
+```bash
+python two_deck.py --corpus FIN --mode 5              # letter transposition
+python two_deck.py --corpus FIN --mode 6 --sub-mode 2 # relative position priming
+```
+
+Nothing needs training first: the trained models, the vocabularies and all
+derived data files are in the repository.
+
+### Route B — rebuild everything from a vocabulary (about 30 minutes)
+
+Run these **in order**. Each step consumes what the previous one produced, and
+every script takes the same `--corpus` flag. Substitute your own corpus key if
+you have registered one (see "Using your own vocabulary").
+
+```
+   corpora/<name>_corpus.txt          the raw vocabulary you supply
+              |
+   1. mod_lower_deck_inputs.py        -> positional corpus + labels
+   2. mod_upper_deck_inputs.py        -> word-centred targets + labels
+              |
+   3. lower_deck.py                   -> <name>_lower_deck.h5   + mapping
+   4. upper_deck.py                   -> <name>_upper_deck.h5   + mapping
+              |
+   5. two_deck.py                     -> predictions, error counts, analysis.txt
+```
+
+```bash
+python mod_lower_deck_inputs.py --corpus FIN     # instant
+python mod_upper_deck_inputs.py --corpus FIN     # instant
+python lower_deck.py --corpus FIN                # ~10 minutes (2000 epochs)
+python upper_deck.py --corpus FIN                # ~20 minutes (2000 epochs)
+python two_deck.py --corpus FIN --mode 1         # a few seconds
+```
+
+Steps 3 and 4 **overwrite the trained models for that corpus**. Add `--epochs 20`
+to either one for a quick end-to-end check before committing to a full run.
+
+### Route B (continued) — the representation analysis
+
+Only needed to reproduce the hidden-layer results. Requires a trained lower deck
+from step 3, and again runs in order:
+
+```bash
+python testbed_input_modding.py --corpus FIN            # build letter probes
+python testbed_target_words.py  --corpus FIN            # probe labels for R
+python testbed_lower_deck.py    --corpus FIN            # ~3 s, writes 4 CSVs
+python letter_category_effect.py --corpus FIN --n-init 10
+```
+
+`letter_category_effect.py` without `--n-init` reproduces the published k-means
+setting, which takes about an hour; `--n-init 10` gives the same clustering in
+seconds.
+
+### If something goes wrong
+
+| Symptom | Cause |
+|---|---|
+| `Missing required input file(s): ...` | A pipeline step was skipped. The message names the missing file and which script produces it. |
+| `argument -c/--corpus: invalid choice` | The corpus key is not registered in `config.py`. The message lists the valid keys. |
+| `UnicodeDecodeError`, or letters come out garbled | A corpus file is not UTF-16. See "Using your own vocabulary". |
+| Errors loading the `.h5` models | Keras 3 is installed. These are Keras 2 models; use TensorFlow 2.11 as pinned. |
+
+---
+
+## Corpora
+
+Three vocabularies ship with the project. Every script takes `--corpus`:
+
+| Key     | Vocabulary                                          | Words | Alphabet |
+|---------|-----------------------------------------------------|-------|----------|
+| `FIN`   | Real Finnish 7-letter words                         | 2000  | 23 + `#` |
+| `FR`    | Real French 7-letter words (Dandurand et al., 2013) | 1985  | 37 + `#` |
+| `FIRND` | Random strings over the Finnish alphabet            | 2000  | 23 + `#` |
+
+`FIRND` is a control: same alphabet and word length as `FIN`, but with the
+orthographic structure of Finnish removed. Comparing it against `FIN` isolates
+how much of the model's behaviour depends on real orthographic regularities.
+
+---
+
+## Reproducing the published analyses
+
+### Recognition performance and the Dandurand test batteries
+
+```bash
+python two_deck.py --corpus FIN   --mode 1
+python two_deck.py --corpus FIRND --mode 5
+python two_deck.py --corpus FIRND --mode 6 --sub-mode 2
+python two_deck.py --corpus FIRND --mode 8 --sub-mode 1 --letter a
+```
+
+Run with no arguments to be prompted for the mode interactively, as before.
+
+| Mode | Battery                          | Sub-modes                              |
+|------|----------------------------------|----------------------------------------|
+| 1    | Corpus run, no alteration        | –                                      |
+| 2    | RS — random strings              | –                                      |
+| 3    | SRL — single repeated letter     | –                                      |
+| 4    | DLS — double letter substitution | –                                      |
+| 5    | LT — letter transposition        | –                                      |
+| 6    | RPP — relative position priming  | 1 = `1234`, 2 = `1357`                 |
+| 7    | TLP — transposed letter priming  | 1 = `1235467`, 2 = `123DD67`           |
+| 8    | Letter proximity analysis        | 1 = random filler, 2 = `#` filler      |
+
+Modes 2–5 count an activation ≥ 0.9 as a false positive; modes 6–7 use ≥ 0.87.
+
+**Expected output.** These are the values this repository produces as shipped:
+
+Mode 1 reports recognition errors; modes 2-7 report false positives, i.e. the
+number of stimuli whose winning lexical unit still reached the threshold.
+
+| Corpus  | 1 (errors)  | 2 (RS)  | 3 (SRL) | 4 (DLS)  | 5 (LT)    | 6.1 (RPP) | 6.2 (RPP) | 7.1 (TLP) | 7.2 (TLP) |
+|---------|-------------|---------|---------|----------|-----------|-----------|-----------|-----------|-----------|
+| `FIN`   | 518/14000   | 0/1000  | 0/1000  | 2/2000   | 22/2000   | 6/2000    | 3/2000    | 177/2000  | 16/2000   |
+| `FR`    | 55/13895    | 19/1000 | 53/1000 | 400/1985 | 1107/1985 | 620/1985  | 289/1985  | 1617/1985 | 1226/1985 |
+| `FIRND` | 337/14000   | 22/1000 | 0/1000  | 150/2000 | 1144/2000 | 81/2000   | 123/2000  | 1454/2000 | 300/2000  |
+
+### Internal representation analysis
+
+```bash
+python testbed_input_modding.py --corpus FIN     # build the letter probes
+python testbed_lower_deck.py   --corpus FIN      # extract hidden activations
+python letter_category_effect.py --corpus FIN --n-init 10
+```
+
+`testbed_lower_deck.py` feeds 299 probes (23 letters × 13 positions, each letter
+isolated in an otherwise empty window) through the lower deck and reads the
+118-unit hidden layer. It writes four files per corpus: the raw activations, a
+per-letter distance matrix, the averaged proximity effect, and the full
+clustering matrix.
+
+`letter_category_effect.py` runs k-means over those activations to test whether
+representations group by letter identity rather than by position. Its default
+`--n-init` reproduces the value used for the published run, which takes about an
+hour; pass `--n-init 10` for a result in seconds.
+
+### A note on exact reproducibility
+
+Predictions are batched by default, which is roughly 250× faster than the
+original one-input-at-a-time loop. Batching changes the decoded letter in a
+handful of near-tied cases — 1 row in 14000 for `FIRND` mode 1 — without
+altering any lexical output or error count. Pass `--batch-size 1` to reproduce
+the original numbers exactly.
+
+Results also vary by a row or two across hardware and TensorFlow builds, because
+floating-point summation order differs. The `analysis.txt` committed here was
+generated on the original project machine and differs from a current Apple
+Silicon run in 3 of 14000 rows.
+
+---
+
+## Using your own vocabulary
+
+**Your word list must be UTF-16 encoded, one word per whitespace-separated
+token, with every word the same length and no characters outside the alphabet
+you intend to model.** UTF-16 is not incidental: the character mappings inside
+the trained models were derived from UTF-16 reads, so a UTF-8 file will produce
+a different mapping and meaningless predictions. Convert an existing file with:
+
+```bash
+iconv -f UTF-8 -t UTF-16 my_words.txt > corpora/my_words.txt
+```
+
+Then:
+
+**1. Register the corpus.** Add one entry to `CORPORA` in `config.py`, copying
+an existing block and changing the filenames. This is the only file you need to
+edit — every script picks the new key up automatically.
+
+```python
+'MYLANG': CorpusConfig(
+    key='MYLANG',
+    description='My 2000-word vocabulary.',
+    source_corpus='corpora/my_words.txt',
+    positional_corpus='mylang_positional_supervised_corpus.txt',
+    ...
+),
+```
+
+**2. Generate the training data.**
+
+```bash
+python mod_lower_deck_inputs.py --corpus MYLANG
+python mod_upper_deck_inputs.py --corpus MYLANG
+```
+
+**3. Train both decks.** About 10 minutes for the lower deck and 20 for the
+upper deck on a 2000-word vocabulary (Apple M2). Pass `--epochs 20` first for a
+quick end-to-end check.
+
+```bash
+python lower_deck.py --corpus MYLANG
+python upper_deck.py --corpus MYLANG
+```
+
+**4. Run it.**
+
+```bash
+python two_deck.py --corpus MYLANG --mode 1
+```
+
+If your words are not 7 letters long, also change `WORD_LENGTH` and
+`WINDOW_LENGTH` in `config.py`. Note that `weight_multiplier.py` defines one
+acuity gradient per fixation position and would need a matching number of
+gradients.
+
+---
+
+## Repository layout
+
+**Configuration**
+
+| File | Purpose |
+|------|---------|
+| `config.py` | Corpus registry, file paths, word geometry, UTF-16 I/O. The only file to edit when adding a vocabulary. |
+
+**Pipeline** — run in this order for a new corpus
+
+| File | Purpose |
+|------|---------|
+| `mod_lower_deck_inputs.py` | Vocabulary → positionally-shifted training inputs |
+| `mod_upper_deck_inputs.py` | Vocabulary → word-centred targets and class labels |
+| `lower_deck.py` | Trains the location-invariance stage |
+| `upper_deck.py` | Trains the lexical-identification stage |
+| `two_deck.py` | **Main entry point.** Runs both decks and the test batteries |
+
+**Model internals**
+
+| File | Purpose |
+|------|---------|
+| `weight_multiplier.py` | Fixation-dependent visual acuity gradients |
+| `output_evaluation.py` | Decodes lower-deck activations into letters |
+| `analytics.py` | Input generators for the Dandurand test batteries |
+
+**Representation analysis**
+
+| File | Purpose |
+|------|---------|
+| `testbed_input_modding.py` | Builds the single-letter probe set |
+| `testbed_target_words.py` | Probe labels for reading results into R |
+| `testbed_lower_deck.py` | Extracts hidden-layer activations, computes distances |
+| `euclidean_distance.py` | Proximity and clustering distance measures |
+| `letter_category_effect.py` | k-means over hidden representations |
+
+**Optional**
+
+| File | Purpose |
+|------|---------|
+| `plot_models.py` | Regenerates architecture diagrams (needs Graphviz) |
+
+**Data**
+
+- `corpora/` — the three source vocabularies
+- `*_positional_supervised_corpus.txt`, `*_two_deck_target_words.txt`,
+  `*_labels.txt` — generated training data
+- `*_lower_deck.h5`, `*_upper_deck.h5`, `*_mapping.pkl` — trained models and
+  their character mappings
+- `study1_data/` — curated result tables for analysis in R
+
+**Superseded.** Kept for reference only; none of these are part of the current
+model and none run from a clone.
+
+- `zero_deck.py` (2023-04) — first proof of concept. A single Dense layer that
+  classifies which padded string it was shown, with no hidden layer and no
+  location invariance. Superseded once inputs and targets were separated and
+  the explicit character mapping replaced `TextVectorization`.
+- `one_deck.py` (2023-05) — the direct ancestor of the current model:
+  `Flatten → Dense(60) → Dense(501)` over a 500-word corpus, where 60 is the
+  same `sqrt(words × letters)` rule that gives 118 today. It maps input
+  straight to word identity in one network. Splitting it into `lower_deck.py`
+  and `upper_deck.py` is what makes the word-centred orthographic code an
+  explicit, inspectable representation — which every test battery in
+  `two_deck.py` reads.
+- `lower_deck_evaluation.py` (2023-05) — scratch harness used before the upper
+  deck existed. Superseded by `two_deck.py --mode 1`. It cannot run: it
+  reshapes to a vocabulary of 27 that matches no corpus, and calls
+  `output_eval()` with one of its three required arguments.
+- `lower_deck.h5`, `upper_deck.h5`, `lower_deck_mapping.pkl`,
+  `upper_deck_mapping.pkl` — an earlier training run of the **French** model
+  under the pre-prefix naming scheme (identical alphabet and architecture; the
+  mappings are byte-identical to `french_*_mapping.pkl`, the weights differ).
+  Superseded by `french_lower_deck.h5` / `french_upper_deck.h5`.
+- `*.rtf` files — corpora and labels from before the UTF-16 `.txt` convention.
+
+These read RTF inputs, two of which (`positional_corpus.rtf`, `word_list.rtf`)
+live outside the repository, so they cannot run for anyone who clones it.
+
+---
+
+## Project evolution
 
 - 01.03.2023: Project started on/off. Basic Keras/TF tutorials and theory regarding NeuralNets
 - 03.04.2023: Working implementation of 'zero-deck-topology'. Prep work for one-deck-topology.
@@ -91,3 +446,27 @@ Model, mapping and lexicon files are required to run properly.
 - 20.06.2023: Two deck replication based on Dandurand et. al. (2013) complete.
 - 30.08.2023: Test cases replicated for French corpus.
 - 05.09.2023: Working Finnish implementation sans test cases.
+- 13.02.2025: Random Finnish control corpus and Study 1 result tables in CSV format.
+- 10.08.2026: Second iteration of the project with user friendly CLI implementation for running and building. Reproducibility pass. Corpora and trained models committed, per-script
+  hard-coded paths replaced by `config.py` and `--corpus`, dependencies pinned,
+  documentation added. Verified to reproduce the previous implementation's
+  output on all eight test modes.
+
+---
+
+## For more information
+
+Hautala, J., Hawelka, S., & Aro, M. (2021). Dual-stage and dual-deficit? Word recognition processes during text reading
+across the reading fluency continuum. Reading and Writing, 1-24. https://doi.org/10.1007/s11145-021-10201-1
+
+Dandurand, F., Hannagan, T., & Grainger, J. (2013). Computational models of location-invariant orthographic processing.
+Connection Science, 25(1), 1-26.
+
+Sibley, D. E., & Kello, C. T. (2012). Learned Orthographic Representations Facilitates Large-Scale Modeling of Word
+Recognition. In Visual Word Recognition Volume 1 (pp. 28-51). Psychology Press.
+
+Snell, J., van Leipsig, S., Grainger, J., & Meeter, M. (2018). OB1-reader: A model of word recognition and eye movements
+in text reading. Psychological review, 125(6), 969.
+
+Li, X., & Pollatsek, A. (2020). An integrated model of word processing and eye-movement control during Chinese reading.
+Psychological Review, 127(6), 1139.

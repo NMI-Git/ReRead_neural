@@ -1,0 +1,17 @@
+# Conda environment for the ReRead two-deck model.
+#
+#   conda env create -f environment.yml
+#   conda activate reread
+#
+# TensorFlow is installed through pip rather than conda because the 2.11 build
+# for Apple Silicon is only published on PyPI, as "tensorflow-macos". On other
+# platforms pip resolves the plain "tensorflow" package instead; see the
+# environment markers in requirements.txt.
+name: reread
+channels:
+  - defaults
+dependencies:
+  - python=3.9
+  - pip
+  - pip:
+      - -r requirements.txt
