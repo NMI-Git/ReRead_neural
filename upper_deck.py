@@ -132,8 +132,8 @@ def main():
     loss, accuracy = model.evaluate(inputs, targets, batch_size=128)
     print('training-set loss: {:.6f}  accuracy: {:.6f}'.format(loss, accuracy))
 
-    model.save(config.PROJECT_ROOT / corpus.upper_deck_model)
-    with open(config.PROJECT_ROOT / corpus.upper_deck_mapping, 'wb') as handle:
+    model.save(config.ensure_parent(corpus.upper_deck_model))
+    with open(config.ensure_parent(corpus.upper_deck_mapping), 'wb') as handle:
         dump(mapping, handle)
     print('saved {} and {}'.format(
         corpus.upper_deck_model, corpus.upper_deck_mapping))

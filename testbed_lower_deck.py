@@ -84,7 +84,7 @@ def main():
         (proximity, corpus.proximity_effect),
         (clustering, corpus.clustering_effect),
     ):
-        np.savetxt(str(config.PROJECT_ROOT / name), data,
+        np.savetxt(str(config.ensure_parent(name)), data,
                    delimiter=',', fmt='%1.8f')
         print('  wrote {:45s} {}'.format(name, data.shape))
 

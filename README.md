@@ -146,7 +146,7 @@ python two_deck.py --corpus FIN --mode 1
 
 Takes a few seconds and prints a recognition error count. Compare it against the
 table in "Reproducing the published analyses" below — `FIN` should report
-518 errors out of 14000.
+0 errors out of 14000.
 
 **3. Run any of the test batteries.**
 
@@ -158,29 +158,30 @@ python two_deck.py --corpus FIN --mode 6 --sub-mode 2 # relative position primin
 Nothing needs training first: the trained models, the vocabularies and all
 derived data files are in the repository.
 
-### Route B — rebuild everything from a vocabulary (about 30 minutes)
+### Route B — rebuild everything from a vocabulary (about 10 minutes)
 
 Run these **in order**. Each step consumes what the previous one produced, and
 every script takes the same `--corpus` flag. Substitute your own corpus key if
 you have registered one (see "Using your own vocabulary").
 
 ```
-   corpora/<name>_corpus.txt          the raw vocabulary you supply
+   data/corpora/<name>_corpus.txt     the raw vocabulary you supply
               |
-   1. mod_lower_deck_inputs.py        -> positional corpus + labels
-   2. mod_upper_deck_inputs.py        -> word-centred targets + labels
+   1. mod_lower_deck_inputs.py        -> data/generated/<slug>/positional_corpus.txt
+   2. mod_upper_deck_inputs.py        -> data/generated/<slug>/target_words.txt
               |
-   3. lower_deck.py                   -> <name>_lower_deck.h5   + mapping
-   4. upper_deck.py                   -> <name>_upper_deck.h5   + mapping
+   3. lower_deck.py                   -> models/<slug>/lower_deck.h5  + mapping
+   4. upper_deck.py                   -> models/<slug>/upper_deck.h5  + mapping
               |
-   5. two_deck.py                     -> predictions, error counts, analysis.txt
+   5. two_deck.py                     -> predictions, error counts,
+                                         results/analysis.txt
 ```
 
 ```bash
 python mod_lower_deck_inputs.py --corpus FIN     # instant
 python mod_upper_deck_inputs.py --corpus FIN     # instant
-python lower_deck.py --corpus FIN                # ~10 minutes (2000 epochs)
-python upper_deck.py --corpus FIN                # ~20 minutes (2000 epochs)
+python lower_deck.py --corpus FIN                # ~2 minutes (stops at epoch 421)
+python upper_deck.py --corpus FIN                # ~3 minutes (stops at epoch 270)
 python two_deck.py --corpus FIN --mode 1         # a few seconds
 ```
 
@@ -362,7 +363,7 @@ altering any lexical output or error count. Pass `--batch-size 1` to reproduce
 the original numbers exactly.
 
 Results also vary by a row or two across hardware and TensorFlow builds, because
-floating-point summation order differs. The `analysis.txt` committed here was
+floating-point summation order differs. The `results/analysis.txt` committed here was
 generated on the original project machine and differs from a current Apple
 Silicon run in 3 of 14000 rows.
 
@@ -377,7 +378,7 @@ the trained models were derived from UTF-16 reads, so a UTF-8 file will produce
 a different mapping and meaningless predictions. Convert an existing file with:
 
 ```bash
-iconv -f UTF-8 -t UTF-16 my_words.txt > corpora/my_words.txt
+iconv -f UTF-8 -t UTF-16 my_words.txt > data/corpora/my_words.txt
 ```
 
 Then:
@@ -390,11 +391,13 @@ edit — every script picks the new key up automatically.
 'MYLANG': CorpusConfig(
     key='MYLANG',
     description='My 2000-word vocabulary.',
-    source_corpus='corpora/my_words.txt',
-    positional_corpus='mylang_positional_supervised_corpus.txt',
-    ...
+    slug='mylang',                    # names its directories
+    corpus_file='my_words.txt',       # inside data/corpora/
 ),
 ```
+
+That is the whole entry. Every path — generated data, models, results — is
+derived from `slug`, and the directories are created on first write.
 
 **2. Generate the training data.**
 
@@ -403,8 +406,9 @@ python mod_lower_deck_inputs.py --corpus MYLANG
 python mod_upper_deck_inputs.py --corpus MYLANG
 ```
 
-**3. Train both decks.** About 10 minutes for the lower deck and 20 for the
-upper deck on a 2000-word vocabulary (Apple M2). Pass `--epochs 20` first for a
+**3. Train both decks.** Training stops when every pattern is correctly
+classified — a few minutes each on a 2000-word vocabulary (Apple M2). Pass
+`--epochs 20` first for a
 quick end-to-end check.
 
 ```bash
@@ -467,17 +471,31 @@ gradients.
 |------|---------|
 | `plot_models.py` | Regenerates architecture diagrams (needs Graphviz) |
 
-**Data**
+**Data, models and results**
 
-- `corpora/` — the three source vocabularies
-- `*_positional_supervised_corpus.txt`, `*_two_deck_target_words.txt`,
-  `*_labels.txt` — generated training data
-- `*_lower_deck.h5`, `*_upper_deck.h5`, `*_mapping.pkl` — trained models and
-  their character mappings
-- `study1_data/` — curated result tables for analysis in R
+Each corpus owns one directory in each of three trees, named by its slug —
+`finnish`, `french`, `fin_random`. Nothing is distinguished by filename prefix,
+so a file cannot belong to the wrong corpus.
 
-**Superseded.** Kept for reference only; none of these are part of the current
-model and none run from a clone.
+```
+data/corpora/          the vocabularies you supply, one word per token
+data/generated/<slug>/ positional_corpus.txt  labels.txt
+                       target_words.txt       upper_deck_labels.txt
+                       probes.txt
+models/<slug>/         lower_deck.h5  lower_deck_mapping.pkl
+                       upper_deck.h5  upper_deck_mapping.pkl
+results/<slug>/        activation_vectors.csv   euclidean_calculations.csv
+                       proximity_effect.csv     clustering_effect.csv
+results/               analysis.txt, figures/
+archive/               superseded material, kept for provenance
+```
+
+Everything under `data/generated/`, `models/` and `results/` is reproducible
+from `data/corpora/` by the pipeline above. It is committed anyway so that a
+clone can be run and checked without retraining first.
+
+**Superseded** — `archive/`. Kept for reference only; none of it is part of the
+current model and none of it runs from a clone.
 
 - `zero_deck.py` (2023-04) — first proof of concept. A single Dense layer that
   classifies which padded string it was shown, with no hidden layer and no
@@ -498,7 +516,7 @@ model and none run from a clone.
   `upper_deck_mapping.pkl` — an earlier training run of the **French** model
   under the pre-prefix naming scheme (identical alphabet and architecture; the
   mappings are byte-identical to `french_*_mapping.pkl`, the weights differ).
-  Superseded by `french_lower_deck.h5` / `french_upper_deck.h5`.
+  Superseded by `models/french/lower_deck.h5` and `models/french/upper_deck.h5`.
 - `*.rtf` files — corpora and labels from before the UTF-16 `.txt` convention.
 
 These read RTF inputs, two of which (`positional_corpus.rtf`, `word_list.rtf`)

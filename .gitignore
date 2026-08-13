@@ -7,7 +7,9 @@
 
 # --- Per-run output dumps ---
 # These are overwritten on every run and would otherwise produce noisy diffs.
-# analysis.txt is kept in version control as a worked example of mode 1 output.
+# results/analysis.txt is kept in version control as a worked example of
+# mode 1 output.
+results/outfile.txt
 outfile.txt
 french_analysis.txt
 finnish_analysis.txt

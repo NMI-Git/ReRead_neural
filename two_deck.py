@@ -194,7 +194,7 @@ def report_corpus_run(raw_inputs, decoded, transcribed, activations):
     print('Predictions with activation >= {}: {}'.format(
         NONWORD_THRESHOLD, confident))
 
-    with open(config.PROJECT_ROOT / 'analysis.txt', 'w') as handle:
+    with open(config.ensure_parent('results/analysis.txt'), 'w') as handle:
         handle.write('{\n')
         for key, value in predictions.items():
             handle.write("'{}':'{}'\n".format(key, value))
@@ -243,7 +243,7 @@ def report_letter_proximity(raw_inputs, decoded, raw_lower_output,
     redundant, but downstream analysis reads this shape, so it is reproduced
     rather than tidied.
     """
-    out_path = config.PROJECT_ROOT / 'outfile.txt'
+    out_path = config.ensure_parent('results/outfile.txt')
     with open(out_path, 'wb') as handle:
         for row in raw_lower_output:
             np.savetxt(handle, raw_inputs, delimiter=' ', fmt='%s')

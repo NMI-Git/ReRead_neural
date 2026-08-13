@@ -137,8 +137,8 @@ def main():
               callbacks=[criterion])
     print(criterion.summary(args.epochs))
 
-    model.save(config.PROJECT_ROOT / corpus.lower_deck_model)
-    with open(config.PROJECT_ROOT / corpus.lower_deck_mapping, 'wb') as handle:
+    model.save(config.ensure_parent(corpus.lower_deck_model))
+    with open(config.ensure_parent(corpus.lower_deck_mapping), 'wb') as handle:
         dump(mapping, handle)
     print('saved {} and {}'.format(
         corpus.lower_deck_model, corpus.lower_deck_mapping))
