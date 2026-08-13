@@ -57,7 +57,10 @@ def main():
     probes = config.load_doc(corpus.testbed_inputs).split()
     inputs = config.encode_words(probes, mapping, vocab_size)
 
-    model = load_model(config.PROJECT_ROOT / corpus.lower_deck_model)
+    # compile=False -- inference only, and the custom training loss cannot be
+    # deserialised from the .h5 without a custom_object_scope. See two_deck.py.
+    model = load_model(
+        config.PROJECT_ROOT / corpus.lower_deck_model, compile=False)
     hidden_layer_model = tf.keras.Model(
         inputs=model.input, outputs=model.get_layer(HIDDEN_LAYER_NAME).output)
     activations = np.array(hidden_layer_model(inputs))

@@ -78,15 +78,18 @@ distorted word should not.
 
 **Fixation weighting.** Before entering the lower deck, each letter is scaled by
 a visual acuity gradient that depends on which letter falls on the fixation
-point (the centre of the window). This is the project's extension beyond
-Dandurand et al.; see the module docstring in `weight_multiplier.py` for the
-gradients and what they encode.
+point (the centre of the window). Dandurand et al. use the same scheme — §2.2
+takes within-word visibility from Stevens and Grainger (2003) "for strings of 7
+letters, and different fixation positions" — so this is a replication rather
+than an extension. Whether the specific weights in `weight_multiplier.py` are
+Stevens and Grainger's published values or were fitted for this project is not
+recorded; see that module's docstring for the gradients and what they encode.
 
 ---
 
 ## Requirements
 
-Verified 2026-08-10 on macOS 15 / Apple M2 (arm64), Python 3.9.
+Verified 2026-08-13 on macOS 15 / Apple M2 (arm64), Python 3.9.
 
 - Python 3.9
 - TensorFlow 2.11.0 — bundles Keras 2.11. **Keras 3 cannot load the `.h5`
@@ -251,18 +254,58 @@ Run with no arguments to be prompted for the mode interactively, as before.
 | 7    | TLP — transposed letter priming  | 1 = `1235467`, 2 = `123DD67`           |
 | 8    | Letter proximity analysis        | 1 = random filler, 2 = `#` filler      |
 
-Modes 2–5 count an activation ≥ 0.9 as a false positive; modes 6–7 use ≥ 0.87.
+Two thresholds are used, following Dandurand et al. (2013). Modes 2–5 count an
+activation ≥ 0.9 as a false positive, the same criterion used for recognition.
+Modes 6–7 use ≥ 0.5, because the point of a priming measure is to detect weaker
+activation *before* a string would be classified as a word (§3.2).
 
-**Expected output.** These are the values this repository produces as shipped:
+The two families also read different units. For a nonword there is no correct
+answer, so modes 2–5 read the winning unit: any unit above threshold is an
+error. For a prime there is a correct answer — the word it was built from — so
+modes 6–7 read that word's own unit, as the paper defines priming.
 
-Mode 1 reports recognition errors; modes 2-7 report false positives, i.e. the
-number of stimuli whose winning lexical unit still reached the threshold.
+**Expected output.** These are the values this repository produces as shipped.
 
-| Corpus  | 1 (errors)  | 2 (RS)  | 3 (SRL) | 4 (DLS)  | 5 (LT)    | 6.1 (RPP) | 6.2 (RPP) | 7.1 (TLP) | 7.2 (TLP) |
-|---------|-------------|---------|---------|----------|-----------|-----------|-----------|-----------|-----------|
-| `FIN`   | 518/14000   | 0/1000  | 0/1000  | 2/2000   | 22/2000   | 6/2000    | 3/2000    | 177/2000  | 16/2000   |
-| `FR`    | 55/13895    | 19/1000 | 53/1000 | 400/1985 | 1107/1985 | 620/1985  | 289/1985  | 1617/1985 | 1226/1985 |
-| `FIRND` | 337/14000   | 22/1000 | 0/1000  | 150/2000 | 1144/2000 | 81/2000   | 123/2000  | 1454/2000 | 300/2000  |
+Recognition (mode 1). "Reaching 0.9" is the recognition criterion itself: the
+target word's unit above 0.9 with no other unit above it.
+
+| Corpus  | Errors     | Reaching 0.9  |
+|---------|------------|---------------|
+| `FIN`   | 0/14000    | 14000/14000   |
+| `FR`    | 0/13895    | 13895/13895   |
+| `FIRND` | 0/14000    | 13641/14000   |
+
+Nonword rejection (modes 2–5): false positives at ≥ 0.9, so **lower is better**.
+
+| Corpus  | 2 (RS)  | 3 (SRL) | 4 (DLS) | 5 (LT)   |
+|---------|---------|---------|---------|----------|
+| `FIN`   | 3/1000  | 0/1000  | 22/2000 | 867/2000 |
+| `FR`    | 5/1000  | 0/1000  | 37/1985 | 463/1985 |
+| `FIRND` | 0/1000  | 0/1000  | 1/2000  | 262/2000 |
+
+Priming (modes 6–7): stimuli reaching ≥ 0.5 on the target's unit. What matters
+is the *contrast* within each pair — the paper predicts `1234` > `1357` and
+`1235467` > `123DD67`, and both hold for every corpus that shows priming at all.
+
+| Corpus  | 6.1 (`1234`) | 6.2 (`1357`) | 7.1 (`1235467`) | 7.2 (`123DD67`) |
+|---------|--------------|--------------|-----------------|-----------------|
+| `FIN`   | 34/2000      | 10/2000      | 666/2000        | 285/2000        |
+| `FR`    | 60/1985      | 4/1985       | 745/1985        | 211/1985        |
+| `FIRND` | 0/2000       | 0/2000       | 751/2000        | 48/2000         |
+
+`FIRND` shows no relative-position priming at all, which is the expected result
+for a control corpus: its strings are random, so a prime made of letters 1, 3, 5
+and 7 carries no regularity the network could use to reconstruct the rest. It
+still shows transposed-letter priming, because a transposition preserves every
+letter of the string.
+
+Note that the `FIN` nonword counts are *higher* than those produced before the
+cost function was corrected, and this is an improvement rather than a
+regression. The previous Finnish model kept almost every activation below 0.9 —
+only 4% of its own training words reached the criterion — so a false-positive
+count of zero meant nothing had cleared the bar, not that words and nonwords
+were being told apart. Measured as separation between the two, letter
+transposition went from 2.9 to 56.7 percentage points.
 
 ### Internal representation analysis
 
@@ -272,11 +315,12 @@ python testbed_lower_deck.py   --corpus FIN      # extract hidden activations
 python letter_category_effect.py --corpus FIN --n-init 10
 ```
 
-`testbed_lower_deck.py` feeds 299 probes (23 letters × 13 positions, each letter
-isolated in an otherwise empty window) through the lower deck and reads the
-118-unit hidden layer. It writes four files per corpus: the raw activations, a
-per-letter distance matrix, the averaged proximity effect, and the full
-clustering matrix.
+`testbed_lower_deck.py` feeds one probe per (letter, position) pair — each letter
+isolated in an otherwise empty window — through the lower deck and reads the
+119-unit hidden layer. That is 299 probes for the 23-letter Finnish alphabet and
+481 for the 37-letter French one. It writes four files per corpus: the raw
+activations, a per-letter distance matrix, the averaged proximity effect, and
+the full clustering matrix.
 
 `letter_category_effect.py` runs k-means over those activations to test whether
 representations group by letter identity rather than by position. Its default
@@ -415,7 +459,7 @@ model and none run from a clone.
   the explicit character mapping replaced `TextVectorization`.
 - `one_deck.py` (2023-05) — the direct ancestor of the current model:
   `Flatten → Dense(60) → Dense(501)` over a 500-word corpus, where 60 is the
-  same `sqrt(words × letters)` rule that gives 118 today. It maps input
+  same `sqrt(words × letters)` rule that gives 119 today. It maps input
   straight to word identity in one network. Splitting it into `lower_deck.py`
   and `upper_deck.py` is what makes the word-centred orthographic code an
   explicit, inspectable representation — which every test battery in

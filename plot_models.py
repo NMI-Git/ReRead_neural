@@ -33,7 +33,7 @@ def main():
         (corpus.lower_deck_model, 'lower_deck'),
         (corpus.upper_deck_model, 'upper_deck'),
     ):
-        model = load_model(config.PROJECT_ROOT / model_path)
+        model = load_model(config.PROJECT_ROOT / model_path, compile=False)
 
         layers_png = '{}_{}.png'.format(corpus.key.lower(), stem)
         plot_model(model, to_file=str(config.PROJECT_ROOT / layers_png),

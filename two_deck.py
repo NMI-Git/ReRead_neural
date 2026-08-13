@@ -262,7 +262,12 @@ def two_deck(corpus, mode, sub_mode=None, letter=None, batch_size=None):
         corpus.source_corpus,
     )
 
-    lower_deck_model = load_model(config.PROJECT_ROOT / corpus.lower_deck_model)
+    # compile=False: these scripts only ever run inference, and the training
+    # objective is a custom function (losses.summed_cross_entropy) that Keras
+    # cannot deserialise from an .h5 without a custom_object_scope. Skipping the
+    # optimiser and loss avoids that entirely and loads faster.
+    lower_deck_model = load_model(
+        config.PROJECT_ROOT / corpus.lower_deck_model, compile=False)
     with open(config.PROJECT_ROOT / corpus.lower_deck_mapping, 'rb') as handle:
         lower_deck_mapping = load(handle)
 
@@ -274,7 +279,8 @@ def two_deck(corpus, mode, sub_mode=None, letter=None, batch_size=None):
     decoded, raw_lower_output = run_lower_deck(
         lower_deck_model, raw_inputs, lower_deck_mapping, batch_size)
 
-    upper_deck_model = load_model(config.PROJECT_ROOT / corpus.upper_deck_model)
+    upper_deck_model = load_model(
+        config.PROJECT_ROOT / corpus.upper_deck_model, compile=False)
     with open(config.PROJECT_ROOT / corpus.upper_deck_mapping, 'rb') as handle:
         upper_deck_mapping = load(handle)
 
