@@ -22,8 +22,17 @@ peak of acuity at or near the fixated letter, and a persistent advantage for the
 word-initial letter, which stays high (0.6-0.95) in every profile even when
 fixation is at the other end of the word.
 
-Filler slots carry no visual information and are zeroed out entirely rather than
-weighted, so the network receives an all-zero vector for empty positions.
+Both effects are in Dandurand et al. (2013) S2.2, which cites Stevens and
+Grainger (2003) for "within-word visibility ... for strings of 7 letters, and
+different fixation positions". Note that visibility genuinely cannot be reduced
+to a fixed function of window slot: the seven profiles disagree about 11 of the
+13 slots, and the fixation slot alone takes values from 0.75 to 0.95 depending
+on which letter of the word lands there. That is the outer-letter crowding
+advantage, and it is why the gradient is selected by where the word starts.
+
+Filler slots carry no visual information. They arrive as all-zero vectors --
+config.build_character_mapping gives the filler no unit of its own -- so they
+are simply left alone by the gradient below.
 """
 
 from enum import Enum
@@ -54,9 +63,6 @@ GRADIENT_BY_WORD_START = {
     0: FixationMultipliers.SEVENTH,
 }
 
-FILLER_INDEX = 0
-
-
 def multiplication(word_start, weights, word_array):
     """Scale the active unit of each letter by its weight, in place."""
     for slot in range(word_start, word_start + len(weights)):
@@ -83,30 +89,22 @@ def weight_applier(word_array, word_start):
 def seek_fixation(word_array):
     """Find where the word starts and apply the matching gradient.
 
-    Filler slots have already been zeroed, so the first row containing a
-    non-zero value is the word's first letter.
+    Filler slots are all-zero, so the first row containing a non-zero value is
+    the word's first letter.
     """
     non_zero_rows = word_array.nonzero()[0]
     return weight_applier(word_array, non_zero_rows[0])
 
 
-def turn_hashes_into_zero_vectors(inputs):
-    """Blank the one-hot unit that stands for the filler token, in place.
-
-    The filler is index 0 of the character mapping, so a padded slot arrives as
-    a vector with a 1 in position 0. Clearing it leaves an all-zero vector,
-    which is what the network should see for an empty position.
-    """
-    for word_array in inputs:
-        for slot in word_array:
-            if slot[FILLER_INDEX] == 1:
-                slot[FILLER_INDEX] = 0
-    return inputs
-
-
 def apply_input_weights(inputs):
-    """Zero the filler slots, then apply the acuity gradient to every word."""
-    turn_hashes_into_zero_vectors(inputs)
+    """Apply the acuity gradient to every word in ``inputs``.
+
+    This used to blank index 0 first, back when the filler token owned that
+    index and arrived one-hot encoded. It must not do so any more: index 0 is
+    now the first letter of the alphabet, so blanking it would silently delete
+    every word-initial 'a'. Blanks are produced by the encoder instead, in
+    config.encode_words.
+    """
     for word_array in inputs:
         seek_fixation(word_array)
     return inputs

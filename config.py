@@ -19,6 +19,8 @@ import codecs
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 
 # ---------------------------------------------------------------------------
@@ -86,6 +88,50 @@ FIXATION_POSITIONS = WINDOW_LENGTH - WORD_LENGTH + 1
 #: output layer is (WINDOW_LENGTH - PADDING_SLOTS) * vocab_size units wide,
 #: i.e. one block of vocab_size units per letter of the word-centred output.
 PADDING_SLOTS = WINDOW_LENGTH - WORD_LENGTH
+
+
+# ---------------------------------------------------------------------------
+# Character mapping and encoding
+# ---------------------------------------------------------------------------
+# Both decks must agree exactly on which letter owns which index, so the two
+# functions below live here rather than being copied into lower_deck.py and
+# upper_deck.py. A previous version of this project kept per-script copies of
+# its configuration and they drifted apart, which is how the corpus lookup
+# table came to pair FIN with the French label file.
+
+
+def build_character_mapping(text):
+    """Map every real letter in ``text`` to an index.
+
+    FILLER_TOKEN is deliberately excluded. Dandurand et al. (2013) encode an
+    empty slot as an all-zero vector -- "Slots in which no letter is present
+    [0 0 0... 0] represent blanks" (S2.3.1.1) -- not as a unit of its own.
+
+    Giving the filler an index cost a permanently dead unit in every input slot
+    and every output block, and made the lower deck's vocabulary one wider than
+    the upper deck's. That mismatch is what prevented the lower deck's output
+    from being fed directly to the upper deck; with the filler gone both decks
+    share one WORD_LENGTH x vocab_size space.
+    """
+    letters = set(text) - {' ', '\n', '\t', FILLER_TOKEN}
+    return {char: index for index, char in enumerate(sorted(letters))}
+
+
+def encode_words(words, mapping, vocab_size=None):
+    """One-hot encode equal-length strings, filler slots becoming all zeros.
+
+    ``to_categorical`` cannot express this: it needs an index for every slot,
+    which is precisely what a blank does not have.
+    """
+    if vocab_size is None:
+        vocab_size = len(mapping)
+    encoded = np.zeros((len(words), len(words[0]), vocab_size), dtype='float32')
+    for row, word in enumerate(words):
+        for slot, char in enumerate(word):
+            index = mapping.get(char)
+            if index is not None:
+                encoded[row, slot, index] = 1.0
+    return encoded
 
 
 @dataclass(frozen=True)

@@ -26,7 +26,6 @@ from pickle import load
 import numpy as np
 import tensorflow as tf
 from keras.models import load_model
-from keras.utils import to_categorical
 
 import config
 import euclidean_distance
@@ -52,10 +51,11 @@ def main():
         mapping = load(handle)
     vocab_size = len(mapping)
 
+    # Encoded but deliberately *not* acuity-weighted: this probe measures how
+    # the hidden layer represents an isolated letter at each window slot, so the
+    # visibility gradient would confound the comparison across positions.
     probes = config.load_doc(corpus.testbed_inputs).split()
-    sequences = np.array([[mapping[char] for char in probe] for probe in probes])
-    inputs = to_categorical(sequences, vocab_size)
-    inputs = weight_multiplier.turn_hashes_into_zero_vectors(inputs)
+    inputs = config.encode_words(probes, mapping, vocab_size)
 
     model = load_model(config.PROJECT_ROOT / corpus.lower_deck_model)
     hidden_layer_model = tf.keras.Model(

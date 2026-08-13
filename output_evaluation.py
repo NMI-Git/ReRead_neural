@@ -15,9 +15,6 @@ the boundary between the two stages of the model.
 
 import numpy as np
 
-#: Index 0 is always the filler token '#' (see config.build_character_mapping).
-FILLER_INDEX = 0
-
 
 def invert_mapping(mapping):
     """Turn a ``{char: index}`` mapping into ``{index: char}``.
@@ -44,13 +41,13 @@ def split_into_letter_blocks(flat_output, vocab_size, word_length):
 def winning_index(block):
     """Index of the most active unit in one letter block.
 
-    The filler token is never a legal output: the upper deck's vocabulary does
-    not contain it, so emitting one would raise a KeyError when the decoded
-    string is re-encoded. When the filler unit wins, the next index is used
-    instead. This reproduces the original behaviour exactly.
+    This used to substitute index 1 whenever index 0 won, because index 0 held
+    the filler token and emitting one would raise a KeyError when the decoded
+    string was re-encoded for the upper deck. The filler no longer has a unit
+    (see config.build_character_mapping), so every index is a real letter and
+    the substitution would now corrupt a legitimate 'a'.
     """
-    index = int(np.argmax(block))
-    return 1 if index == FILLER_INDEX else index
+    return int(np.argmax(block))
 
 
 def decode_word(flat_output, vocab_size, index_to_char, word_length):

@@ -31,6 +31,7 @@ import tensorflow as tf
 from keras.utils import to_categorical
 
 import config
+import losses
 
 tf.keras.utils.set_random_seed(24)
 np.set_printoptions(threshold=np.inf)
@@ -38,25 +39,26 @@ np.set_printoptions(threshold=np.inf)
 DEFAULT_EPOCHS = 2000
 LEARNING_RATE = 0.9
 MOMENTUM = 0.2
-L2_REGULARIZATION = 0.0005
 
-
-def build_character_mapping(text):
-    """Map every character in ``text`` to an integer index."""
-    chars = sorted(set(text))
-    chars.remove(' ')
-    return {char: index for index, char in enumerate(chars)}
+# There is deliberately no weight regularisation here. Dandurand et al. (2013)
+# report none, and the L2 term this model previously carried was compensating
+# for the wrong cost function: with categorical_crossentropy the non-target
+# units were never driven towards zero, so they sat around 0.85 and the only way
+# to keep them under the 0.9 recognition criterion was to shrink every weight.
+# That capped the target unit as well. With the loss corrected, non-target units
+# settle near 0.006 on their own, and reinstating L2 collapses the model.
 
 
 def build_model(word_length, vocab_size, lexicon_size):
     """Flatten -> one sigmoid unit per lexical entry."""
+    initializer = tf.keras.initializers.RandomUniform(minval=-0.5, maxval=0.5)
     model = tf.keras.models.Sequential()
     model.add(tf.keras.layers.Flatten(input_shape=(word_length, vocab_size)))
     model.add(tf.keras.layers.Dense(
         lexicon_size, activation='sigmoid',
-        kernel_regularizer=tf.keras.regularizers.l2(L2_REGULARIZATION)))
+        kernel_initializer=initializer))
     model.compile(
-        loss=tf.losses.categorical_crossentropy,
+        loss=losses.summed_cross_entropy,
         optimizer=tf.keras.optimizers.legacy.SGD(
             learning_rate=LEARNING_RATE, momentum=MOMENTUM),
         metrics=['accuracy'],
@@ -83,12 +85,15 @@ def main():
 
     word_text = config.load_doc(corpus.target_words)
     words = word_text.split()
-    mapping = build_character_mapping(word_text)
+    mapping = config.build_character_mapping(word_text)
     vocab_size = len(mapping)
     word_length = max(len(word) for word in words)
 
-    sequences = np.array([[mapping[char] for char in word] for word in words])
-    inputs = to_categorical(sequences, vocab_size)
+    # The same encoder the lower deck uses, so that this deck's input space is
+    # identical to the lower deck's output space. That is what lets the lower
+    # deck's continuous activations be fed straight in at recall time, as
+    # Dandurand et al. (2013) S2.5 specifies.
+    inputs = config.encode_words(words, mapping, vocab_size)
 
     labels = config.load_doc(corpus.upper_deck_labels).split()
     lexicon_size = len(set(labels))

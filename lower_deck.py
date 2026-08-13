@@ -28,44 +28,28 @@ from pickle import dump
 
 import numpy as np
 import tensorflow as tf
-from keras.utils import to_categorical
 
 import config
+import losses
 import weight_multiplier
 
 # Fixed seed so that a retrained model reproduces the published one.
 tf.keras.utils.set_random_seed(24)
 np.set_printoptions(threshold=np.inf)
 
-#: Hidden layer width. Originally derived as int(sqrt(word_count * WORD_LENGTH))
-#: for the 2000-word Finnish corpus (sqrt(14000) = 118.3). The same width was
-#: kept for the French corpus so the two models stay directly comparable, and
-#: all shipped models use it -- do not replace this with the formula or you will
-#: change the French architecture.
-HIDDEN_UNITS = 118
+#: Hidden layer width. Dandurand et al. (2013) set it to "the square root of the
+#: number of training patterns rounded up to the closest integer", and footnote 3
+#: spells the calculation out as sqrt(2000 words * 7 positions) = 119. This
+#: project previously rounded down to 118.
+HIDDEN_UNITS = 119
 
 DEFAULT_EPOCHS = 2000
-LEARNING_RATE = 100
-MOMENTUM = 0.5
 
-
-def build_character_mapping(text):
-    """Map every character in ``text`` to an integer index.
-
-    The filler token sorts before the letters, so it always receives index 0.
-    Several other parts of the project rely on that (weight_multiplier.py
-    detects filler slots by testing index 0, and output_evaluation.py refuses to
-    emit index 0 so that a filler can never appear in a decoded word).
-    """
-    chars = sorted(set(text))
-    chars.remove(' ')
-    return {char: index for index, char in enumerate(chars)}
-
-
-def encode_words(words, mapping, vocab_size):
-    """One-hot encode a list of equal-length words -> (n_words, len, vocab)."""
-    sequences = np.array([[mapping[char] for char in word] for word in words])
-    return to_categorical(sequences, vocab_size)
+#: Dandurand et al. (2013) S2.4. The project previously used 100 with Keras's
+#: averaged mean squared error, which is the same effective rate expressed in a
+#: different normalisation -- see losses.py.
+LEARNING_RATE = 0.9
+MOMENTUM = 0.2
 
 
 def build_model(window_length, vocab_size):
@@ -81,9 +65,13 @@ def build_model(window_length, vocab_size):
     model.add(tf.keras.layers.Dense(
         output_units, activation='sigmoid', name='output_layer'))
     model.compile(
-        loss=tf.keras.losses.MeanSquaredError(),
+        loss=losses.summed_cross_entropy,
         optimizer=tf.keras.optimizers.legacy.SGD(
             learning_rate=LEARNING_RATE, momentum=MOMENTUM),
+        # Squared error is not the training objective any more, but the paper
+        # reports SSE as its stopping signal ("we empirically found that the
+        # following SSE values yielded such accuracy: 100 ... for decks 1 and 2
+        # of two-deck networks"), so it stays visible during training.
         metrics=['mean_squared_error'],
     )
     return model
@@ -104,18 +92,18 @@ def main():
     # --- Inputs: words at every position in the window -------------------
     positional_text = config.load_doc(corpus.positional_corpus)
     positional_words = positional_text.split()
-    mapping = build_character_mapping(positional_text)
+    mapping = config.build_character_mapping(positional_text)
     vocab_size = len(mapping)
     window_length = max(len(word) for word in positional_words)
 
-    inputs = encode_words(positional_words, mapping, vocab_size)
+    inputs = config.encode_words(positional_words, mapping, vocab_size)
     weighted_inputs = weight_multiplier.apply_input_weights(inputs)
 
     # --- Targets: the same words, word-centred ---------------------------
     # Encoded with the *input* mapping so that output block i of the network
     # indexes the same alphabet the input does.
     target_words = config.load_doc(corpus.target_words).split()
-    targets = encode_words(target_words, mapping, vocab_size)
+    targets = config.encode_words(target_words, mapping, vocab_size)
     flattened_targets = targets.reshape(len(target_words), -1)
 
     if len(positional_words) != len(target_words):

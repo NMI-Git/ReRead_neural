@@ -34,7 +34,6 @@ import argparse
 import numpy as np
 import tensorflow as tf
 from keras.models import load_model
-from keras.utils import to_categorical
 from pickle import load
 
 import analytics
@@ -54,9 +53,14 @@ np.set_printoptions(threshold=np.inf)
 #: the model has accepted a nonword as a word.
 NONWORD_THRESHOLD = 0.9
 
-#: For the priming modes 6-7. Note this is 0.87, not the 0.5 mentioned in some
-#: older comments; 0.87 is the value all published results were produced with.
-PRIMING_THRESHOLD = 0.87
+#: For the priming modes 6-7. Dandurand et al. (2013) S3.2 use a deliberately
+#: lower threshold here than for discrimination: "in the priming simulations
+#: presented here, the goal is to identify effects of weaker activations of a
+#: prime stimulus prior to stimulus classification, so a lower threshold value
+#: is used (0.5)". This project previously used 0.87, which was the only band
+#: where any priming signal survived while the upper deck's non-target units
+#: were stuck near 0.85 -- a workaround for the cost function, not a choice.
+PRIMING_THRESHOLD = 0.5
 
 #: Index of the centred placement within each word's block of
 #: FIXATION_POSITIONS rows: '###aaltola###'. The distortion batteries operate
@@ -69,19 +73,15 @@ def slice_centred_words(positional_words):
     return positional_words[CENTRED_OFFSET::config.FIXATION_POSITIONS]
 
 
-def encode(words, mapping, vocab_size):
-    """One-hot encode words using a character mapping."""
-    sequences = np.array([[mapping[char] for char in word] for word in words])
-    return to_categorical(sequences, vocab_size)
-
-
 def run_lower_deck(model, words, mapping, batch_size=None):
     """Encode, apply the fixation acuity gradient, predict, and decode.
 
-    Returns (decoded_strings, raw_output_matrix).
+    Returns (decoded_strings, raw_output_matrix). The decoded strings are for
+    display and for the mode 8 dump; they are no longer what the upper deck
+    receives -- see run_upper_deck.
     """
     vocab_size = len(mapping)
-    inputs = encode(words, mapping, vocab_size)
+    inputs = config.encode_words(words, mapping, vocab_size)
     weighted = weight_multiplier.apply_input_weights(inputs)
 
     raw = model.predict(weighted, batch_size=batch_size, verbose=0)
@@ -95,18 +95,43 @@ def run_lower_deck(model, words, mapping, batch_size=None):
     return decoded, raw
 
 
-def run_upper_deck(model, decoded_words, mapping, batch_size=None):
-    """Predict lexical units for decoded words.
+def run_upper_deck(model, word_centred, batch_size=None):
+    """Predict lexical units from a word-centred representation.
+
+    ``word_centred`` has shape (n, WORD_LENGTH, vocab_size) and at recall time
+    is the lower deck's own continuous output. Dandurand et al. (2013) S2.5:
+    "In contrast with training which is performed with idealized all-or-nothing
+    (0 and 1) inputs and targets for deck 2, network recall in deck 2 is
+    performed with the actual, continuous outputs of deck 1 without any
+    threshold or other transformation."
+
+    This project previously took the argmax of each letter block, assembled a
+    string, and re-encoded it as clean one-hot. That discards the lower deck's
+    uncertainty -- and for a partial input such as a four-letter priming stimulus
+    it invents a complete word the lower deck never proposed, because argmax
+    still returns a letter for slots holding almost no activation.
 
     Returns (winning_indices, winning_activations, raw_output_matrix).
     """
-    vocab_size = len(mapping)
-    inputs = encode(decoded_words, mapping, vocab_size)
-    raw = model.predict(inputs, batch_size=batch_size, verbose=0)
+    raw = model.predict(word_centred, batch_size=batch_size, verbose=0)
 
     winners = np.argmax(raw, axis=1)
     activations = raw[np.arange(len(raw)), winners]
     return winners, activations, raw
+
+
+def priming_targets(corpus):
+    """Lexical unit index of the word each priming stimulus was derived from.
+
+    The priming batteries build one stimulus per centred word, in corpus order,
+    so row i of the upper deck's output belongs to lexicon entry i.
+    """
+    lexicon = config.load_doc(corpus.source_corpus).split()
+    unit_of = {word: index for index, word in enumerate(lexicon)}
+    centred = slice_centred_words(
+        config.load_doc(corpus.positional_corpus).split())
+    return np.array(
+        [unit_of[word.replace(config.FILLER_TOKEN, '')] for word in centred])
 
 
 def transcribe(winning_indices, source_corpus_path):
@@ -178,13 +203,34 @@ def report_corpus_run(raw_inputs, decoded, transcribed, activations):
 
 
 def report_false_positives(activations, threshold):
-    """Modes 2-7: count inputs the model wrongly accepted as known words."""
+    """Modes 2-5: count nonwords the model wrongly accepted as known words.
+
+    Any lexical unit above threshold is an error here, so this reads the
+    winning unit -- there is no correct answer for a nonword.
+    """
     activations = np.asarray(activations)
     false_positives = int(np.sum(activations >= threshold))
     print('False positives (activation >= {}): {} / {}'.format(
         threshold, false_positives, len(activations)))
     print('Mean winning activation: {:.6f}'.format(float(activations.mean())))
     return false_positives
+
+
+def report_priming(raw_upper_output, targets, threshold):
+    """Modes 6-7: how often a prime activates the unit of its own target word.
+
+    Dandurand et al. (2013) S3.2 define priming on the target's unit -- "a word
+    is considered primed by some input if its corresponding lexical output unit
+    is activated above some threshold" -- not on whichever unit happens to win.
+    The two differ whenever a prime drives some other word more strongly than
+    the one it was built from.
+    """
+    activations = raw_upper_output[np.arange(len(raw_upper_output)), targets]
+    primed = int(np.sum(activations >= threshold))
+    print('Primed (target unit activation >= {}): {} / {}'.format(
+        threshold, primed, len(activations)))
+    print('Mean target activation: {:.6f}'.format(float(activations.mean())))
+    return primed
 
 
 def report_letter_proximity(raw_inputs, decoded, raw_lower_output,
@@ -232,8 +278,20 @@ def two_deck(corpus, mode, sub_mode=None, letter=None, batch_size=None):
     with open(config.PROJECT_ROOT / corpus.upper_deck_mapping, 'rb') as handle:
         upper_deck_mapping = load(handle)
 
-    winners, activations, _ = run_upper_deck(
-        upper_deck_model, decoded, upper_deck_mapping, batch_size)
+    # The continuous handoff below only makes sense if both decks index the same
+    # alphabet. They are built from different files (positional corpus vs.
+    # word-centred targets) so this is checked rather than assumed.
+    if lower_deck_mapping != upper_deck_mapping:
+        raise SystemExit(
+            'Deck mappings disagree for corpus {}: the lower deck has {} '
+            'characters and the upper deck {}. Retrain both decks so they are '
+            'built from the same alphabet.'.format(
+                corpus.key, len(lower_deck_mapping), len(upper_deck_mapping)))
+
+    word_centred = raw_lower_output.reshape(
+        len(raw_inputs), config.WORD_LENGTH, len(upper_deck_mapping))
+    winners, activations, raw_upper_output = run_upper_deck(
+        upper_deck_model, word_centred, batch_size)
     transcribed = transcribe(winners, corpus.source_corpus)
 
     if mode == 1:
@@ -243,7 +301,8 @@ def two_deck(corpus, mode, sub_mode=None, letter=None, batch_size=None):
             raw_inputs, decoded, transcribed, activations, len(activations))
         report_false_positives(activations, NONWORD_THRESHOLD)
     elif 6 <= mode <= 7:
-        report_false_positives(activations, PRIMING_THRESHOLD)
+        report_priming(
+            raw_upper_output, priming_targets(corpus), PRIMING_THRESHOLD)
     elif mode == 8:
         report_letter_proximity(
             raw_inputs, decoded, raw_lower_output, len(lower_deck_mapping))

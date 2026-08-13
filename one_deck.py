@@ -1,3 +1,17 @@
+"""One-deck topology from Dandurand et al. (2013): a single hidden layer
+mapping location-specific letters straight onto lexical units.
+
+Kept because the paper's central claim compares this against the zero-deck and
+two-deck topologies -- see zero_deck.py and two_deck.py.
+
+NOT CURRENTLY RUNNABLE. This script predates the config.py refactor and still
+carries hardcoded paths, and it builds its own one-hot encoding in which the
+filler token owns index 0. weight_multiplier.apply_input_weights no longer
+blanks that index, because index 0 is a real letter for every other caller now.
+Before running this, port it to config.build_character_mapping and
+config.encode_words as lower_deck.py does.
+"""
+
 import numpy as np
 import tensorflow as tf
 import weight_multiplier
