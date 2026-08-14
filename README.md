@@ -81,9 +81,7 @@ a visual acuity gradient that depends on which letter falls on the fixation
 point (the centre of the window). Dandurand et al. use the same scheme — §2.2
 takes within-word visibility from Stevens and Grainger (2003) "for strings of 7
 letters, and different fixation positions" — so this is a replication rather
-than an extension. Whether the specific weights in `weight_multiplier.py` are
-Stevens and Grainger's published values or were fitted for this project is not
-recorded; see that module's docstring for the gradients and what they encode.
+than an extension.
 
 ---
 
