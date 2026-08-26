@@ -74,7 +74,7 @@ def main():
     proximity_raw = euclidean_distance.calculate_euclidean_distance(
         activations, config.WINDOW_LENGTH)
     proximity = euclidean_distance.count_average_euclidean_distance(
-        proximity_raw, vocab_size)
+        proximity_raw)
     clustering = euclidean_distance.calculate_euclidean_distance(
         activations, activations.shape[0])
 

@@ -63,6 +63,56 @@ Proportion of primes activating **their own target word's** lexical unit above 0
 | SILNECE-SILENCE | 30.43% | 604 | 1985 | 25.95% | 519 | 2000 | 18.95% | 379 | 2000 |
 | SILOPCE-SILENCE | 4.94% | 98 | 1985 | 6.75% | 135 | 2000 | 0.05% | 1 | 2000 |
 
+## Table 3. Proximity effect (hidden-layer distances, position x position)
+
+Off-diagonal cells of the 13 x 13 matrix, 156 per corpus. Regenerate with
+`python representation_stats.py`.
+
+| Model | M | SD | n |
+|---|---|---|---|
+| French | 2.45 | 0.29 | 156 |
+| Finnish | 2.97 | 0.36 | 156 |
+| Random Finnish | 3.91 | 0.55 | 156 |
+
+French vs Finnish: *F*(1, 310) = 203.57, *p* < .001.
+
+## Table 4. Letter cluster effect (hidden-layer distances, letter x letter)
+
+Full letter-by-letter matrix, diagonal included: 37 x 37 for French, 23 x 23 for
+the Finnish corpora.
+
+| Model | M | SD | n |
+|---|---|---|---|
+| French | 2.89 | 0.70 | 1369 |
+| Finnish | 3.31 | 0.44 | 529 |
+| Random Finnish | 4.16 | 0.15 | 529 |
+
+French vs Finnish: *F*(1, 1896) = 164.66, *p* < .001.
+
+### Training length confounds the random-model comparison
+
+Criterion stopping halts each model at a different epoch — Finnish 421, French
+404 — but the random corpus never meets the criterion and runs to the
+2000-epoch ceiling. It therefore receives roughly five times the training of the
+other two, and longer training increases representational separation on its own.
+
+Retraining the random lower deck for 421 epochs, matching Finnish, removes the
+difference entirely:
+
+| Random Finnish lower deck | proximity M (SD) | letter cluster M (SD) |
+|---|---|---|
+| 2000 epochs (committed, criterion never met) | 3.91 (0.55) | 4.16 (0.15) |
+| **421 epochs (matched to Finnish)** | **2.92 (0.48)** | **3.24 (0.16)** |
+| *Finnish at 421 epochs, for reference* | *2.97 (0.36)* | *3.31 (0.44)* |
+
+At equal training the random model is indistinguishable from Finnish, and
+marginally lower rather than higher on both measures. Any claim that a random
+training scheme *improves* letter position or identity coding should therefore
+be attributed to training length, not to the corpus.
+
+The tables above report the committed models as they stand; the matched-epoch
+figures are a control, and the model producing them is not saved.
+
 ## LaTeX source
 
 ```latex

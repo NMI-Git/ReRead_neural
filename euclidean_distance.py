@@ -41,14 +41,20 @@ def calculate_euclidean_distance(intermediate_output, block_length):
     return distances
 
 
-def count_average_euclidean_distance(euclidean_output, vocab_size):
-    """Average a 299 x 13 proximity matrix down to 13 x 13.
+def count_average_euclidean_distance(euclidean_output):
+    """Average a (letters x positions) x 13 proximity matrix down to 13 x 13.
 
     Sums the distance for each (position, position) pair across all letters,
-    then divides by the number of letters. ``vocab_size`` includes the filler
-    token, which is not probed, hence the ``- 1``.
+    then divides by the number of letters.
+
+    The letter count is derived from the data rather than passed in. It used to
+    be taken from the character mapping minus one, because the mapping carried a
+    filler token that is never probed. The filler no longer has a unit (see
+    config.build_character_mapping), so that subtraction would now divide by one
+    letter too few and inflate every cell.
     """
     block_length = euclidean_output.shape[1]
+    letter_count = len(euclidean_output) // block_length
     averages = np.zeros((block_length, block_length))
     for row in range(block_length):
         for column in range(block_length):
@@ -57,4 +63,4 @@ def count_average_euclidean_distance(euclidean_output, vocab_size):
                 averages[row][column] += euclidean_output[index][column]
                 index += block_length
 
-    return averages / (vocab_size - 1)
+    return averages / letter_count
