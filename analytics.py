@@ -93,12 +93,37 @@ def double_letter_substitution(words, alphabet):
     return result
 
 
+#: String indices swapped by letter_transposition -- word positions 5 and 6,
+#: matching Dandurand et al.'s SILENCE -> SILECNE.
+LT_SWAP = (7, 8)
+
+#: String indices swapped by transposed_letter_priming sub-mode 1 -- word
+#: positions 4 and 5, matching SILENCE -> SILNECE.
+TLP_SWAP = (6, 7)
+
+
+def degenerate_swap(words, indices):
+    """Which words are unchanged by swapping ``indices``?
+
+    A transposition of two identical letters is a no-op, so the stimulus fails
+    to instantiate its condition: in the letter-transposition battery the result
+    is not a nonword but the base word itself, and in transposed-letter priming
+    it is the target rather than a prime. Such items are excluded when the
+    results are scored -- see two_deck.py. They affect 4.8% of French but 28.2%
+    of Finnish letter-transposition items, because Finnish has far more
+    double letters.
+    """
+    first, second = indices
+    return [word[first] == word[second] for word in words]
+
+
 def letter_transposition(words):
-    """LT: swap the two middle letters of each word ('1234567' -> '1235467')."""
+    """LT: swap the two middle letters of each word ('1234567' -> '1234657')."""
+    first, second = LT_SWAP
     result = []
     for word in words:
         new_word = list(word)
-        new_word[7], new_word[8] = new_word[8], new_word[7]
+        new_word[first], new_word[second] = new_word[second], new_word[first]
         result.append(''.join(new_word))
     return result
 
@@ -137,7 +162,8 @@ def transposed_letter_priming(words, sub_mode, alphabet):
     for word in words:
         new_word = list(word)
         if sub_mode == '1':
-            new_word[6], new_word[7] = new_word[7], new_word[6]
+            first, second = TLP_SWAP
+            new_word[first], new_word[second] = new_word[second], new_word[first]
         else:
             banned = list(set(word))
             for index in indexes:

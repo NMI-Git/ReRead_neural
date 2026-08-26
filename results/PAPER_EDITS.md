@@ -102,7 +102,7 @@ most likely a difference between LexiCAL and that implementation.
 | Random String | 100% / 1000 / 0 | **100%** / 1000 / **0** | **100%** / 1000 / **0** |
 | Single Repeated Letter | 100% / 1000 / 0 | **100%** / 1000 / **0** | 100% / 1000 / 0 |
 | Double Letter Substitution | **99.7%** / 1985 / **5** | **99.7%** / 2000 / **6** | **100%** / 2000 / **0** |
-| Letter Transposition | **87.5%** / 1985 / **248** | **67.0%** / 2000 / **659** | **98.5%** / 2000 / **29** |
+| Letter Transposition | **91.8%** / 1893 / **156** | **93.3%** / 1437 / **96** | **99.5%** / 1926 / **9** |
 
 **The priming rows now measure a different quantity.** They previously counted
 priming activations as errors at a 0.87 threshold on the winning unit. They now
@@ -114,8 +114,20 @@ measured, not a failure. Relabel the columns.
 |---|---|---|---|
 | SILE–SILENCE | 1.21% / 24 | 0.75% / 15 | 0.00% / 0 |
 | SLNE–SILENCE | 0.10% / 2 | 0.20% / 4 | 0.00% / 0 |
-| SILNECE–SILENCE | 30.43% / 604 | 25.95% / 519 | 18.95% / 379 |
-| SILOPCE–SILENCE | 4.94% / 98 | 6.75% / 135 | 0.05% / 1 |
+| SILNECE–SILENCE | 26.54% / 499 | 18.36% / 333 | 14.69% / 279 |
+| SILOPCE–SILENCE | 5.05% / 95 | 6.50% / 118 | 0.05% / 1 |
+
+Letter transposition and both transposed-letter priming rows use reduced
+denominators. Degenerate items — where the two swapped positions hold the same
+letter, so the transposition is a no-op — are excluded: 92 French, 563 Finnish,
+74 FIN random for letter transposition; 105 / 186 / 101 for priming. `SILOPCE`
+items are always valid but drop alongside their `SILNECE` partners so the
+contrast stays within-item.
+
+| Contrast | French | Finnish | FIN random |
+|---|---|---|---|
+| RPP | +1.11 pp | +0.55 pp | 0.00 pp |
+| TLP | +21.49 pp | +11.85 pp | +14.64 pp |
 
 Both predicted orderings hold in every corpus that primes at all:
 `SILE > SLNE` and `SILNECE > SILOPCE`.
@@ -168,10 +180,11 @@ the comparison:
 | Random | 2000 | 74 | 29 | 20 | 9/1926 = 0.5% |
 
 Every identical item necessarily reaches threshold, because it *is* the base
-word. Excluding them, **Finnish (6.7%) outperforms French (8.2%)** — the
-opposite of the raw figures (33.0% versus 12.5%). This strengthens rather than
-weakens the existing argument that the French/Finnish difference is not of
-theoretical interest.
+word. **This exclusion is now applied in the code**, so the Table 2 figures
+above already reflect it: Finnish letter-transposition accuracy is 93.3% against
+French 91.8%, reversing the raw ordering. This strengthens rather than weakens
+the existing argument that the French/Finnish difference is not of theoretical
+interest.
 
 **NO CHANGE** — "above a threshold value of 0.5". The text already specified
 0.5; the implementation previously used 0.87 and now matches.
@@ -186,8 +199,10 @@ theoretical interest.
 |---|---|---|
 | French | M = 2.28, SD = 0.71 | **M = 2.45, SD = 0.29** |
 | Finnish | M = 2.67, SD = 0.85 | **M = 2.97, SD = 0.36** |
-| Random | M = 2.80, SD = 0.99 | **M = 3.91, SD = 0.55** |
-| French vs Finnish | F(1, 310) = 19.13 | **F(1, 310) = 203.57**, p < .001 |
+| Random | M = 2.80, SD = 0.99 | **M = 2.92, SD = 0.48** |
+| French vs Finnish | F(1, 310) = 19.13 | **F(1, 310) = 198.48**, p < .001 |
+
+All three lower decks were trained for 421 epochs for this analysis — see below.
 
 **REPLACE** — "The artificial model produced **slightly** higher distance values
 than the Finnish model." The gap is no longer slight (3.91 versus 2.97).
@@ -203,13 +218,17 @@ match Finnish:
 
 | Random Finnish lower deck | proximity M (SD) | letter cluster M (SD) |
 |---|---|---|
-| 2000 epochs (as committed) | 3.91 (0.55) | 4.16 (0.15) |
+| 2000 epochs (its own stopping point) | 3.91 (0.55) | 4.16 (0.15) |
 | **421 epochs (matched)** | **2.92 (0.48)** | **3.24 (0.16)** |
 | *Finnish at 421, for reference* | *2.97 (0.36)* | *3.31 (0.44)* |
 
-At equal training the random model is indistinguishable from Finnish and
-marginally **lower** on both measures. The apparent advantage is training
-length, not corpus structure.
+At equal training the random model falls **below** Finnish on both measures
+rather than above it. The apparent advantage is training length, not corpus
+structure.
+
+Tables 3 and 4 above are therefore computed from lower decks all trained for
+421 epochs — the point at which Finnish meets its criterion, so neither real
+corpus is cut short. Run `python matched_representations.py` to reproduce.
 
 ---
 
@@ -217,10 +236,10 @@ length, not corpus structure.
 
 | | Published | Replace with |
 |---|---|---|
-| French | M = 2.84, SD = 0.70 | **M = 2.89, SD = 0.70** |
+| French | M = 2.84, SD = 0.70 | **M = 2.90, SD = 0.70** |
 | Finnish | M = 3.19, SD = 0.46 | **M = 3.31, SD = 0.44** |
-| Random | M = 3.57, SD = 0.19 | **M = 4.16, SD = 0.15** |
-| French vs Finnish | F(1, 1896) = 47.54 | **F(1, 1896) = 164.66**, p < .001 |
+| Random | M = 3.57, SD = 0.19 | **M = 3.24, SD = 0.16** |
+| French vs Finnish | F(1, 1896) = 47.54 | **F(1, 1896) = 159.42**, p < .001 |
 
 **REWRITE** — "These results suggest that the random training scheme may
 improve, rather than hamper, also letter identity coding." Same confound as

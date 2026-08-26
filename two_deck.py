@@ -120,6 +120,48 @@ def run_upper_deck(model, word_centred, batch_size=None):
     return winners, activations, raw
 
 
+def excluded_items(corpus, mode, sub_mode):
+    """Stimuli dropped when results are reported, and why.
+
+    Returns ``(mask, reason)`` or ``(None, None)``. The stimuli are still
+    generated -- only the scoring changes.
+
+    Two situations, with different justifications:
+
+    Modes 5 and 7.1 transpose two letter positions. Where those positions hold
+    the same letter the transposition is a no-op and the stimulus is identical
+    to the word it came from. In mode 5 that means it is not a nonword; in mode
+    7.1 it is the target rather than a prime. Either way it necessarily reaches
+    threshold, because it *is* the word, so scoring it measures nothing about
+    the condition.
+
+    Mode 7.2 substitutes positions 4 and 5 with letters absent from the word, so
+    its own stimuli are always valid. Its items are dropped anyway, using the
+    same mask as 7.1, because the reported quantity is the *contrast* between
+    the two priming conditions for a given target word. A word whose 7.1 prime
+    is degenerate cannot contribute a valid pair, so it must leave both sides or
+    the contrast is computed across different item sets.
+    """
+    if mode == 5:
+        indices = analytics.LT_SWAP
+        reason = ('the transposition was a no-op, so the stimulus is the base '
+                  'word itself and not a nonword')
+    elif mode == 7 and str(sub_mode) == '1':
+        indices = analytics.TLP_SWAP
+        reason = ('the transposition was a no-op, so the stimulus is the '
+                  'target itself and not a prime')
+    elif mode == 7 and str(sub_mode) == '2':
+        indices = analytics.TLP_SWAP
+        reason = ('their 1235467 counterpart was degenerate, so the pair '
+                  'cannot contribute to a within-item contrast')
+    else:
+        return None, None
+
+    centred = slice_centred_words(
+        config.load_doc(corpus.positional_corpus).split())
+    return np.array(analytics.degenerate_swap(centred, indices)), reason
+
+
 def priming_targets(corpus):
     """Lexical unit index of the word each priming stimulus was derived from.
 
@@ -202,21 +244,31 @@ def report_corpus_run(raw_inputs, decoded, transcribed, activations):
     print('wrote analysis.txt')
 
 
-def report_false_positives(activations, threshold):
+def report_false_positives(activations, threshold, excluded=None, reason=''):
     """Modes 2-5: count nonwords the model wrongly accepted as known words.
 
     Any lexical unit above threshold is an error here, so this reads the
     winning unit -- there is no correct answer for a nonword.
+
+    ``excluded`` marks stimuli that are not actually nonwords; see
+    excluded_items. They are dropped from the count and reported separately.
     """
     activations = np.asarray(activations)
+    dropped = 0
+    if excluded is not None and excluded.any():
+        dropped = int(excluded.sum())
+        activations = activations[~excluded]
     false_positives = int(np.sum(activations >= threshold))
     print('False positives (activation >= {}): {} / {}'.format(
         threshold, false_positives, len(activations)))
+    if dropped:
+        print('Excluded {} item(s): {}.'.format(dropped, reason))
     print('Mean winning activation: {:.6f}'.format(float(activations.mean())))
     return false_positives
 
 
-def report_priming(raw_upper_output, targets, threshold):
+def report_priming(raw_upper_output, targets, threshold, excluded=None,
+                   reason=''):
     """Modes 6-7: how often a prime activates the unit of its own target word.
 
     Dandurand et al. (2013) S3.2 define priming on the target's unit -- "a word
@@ -226,9 +278,15 @@ def report_priming(raw_upper_output, targets, threshold):
     the one it was built from.
     """
     activations = raw_upper_output[np.arange(len(raw_upper_output)), targets]
+    dropped = 0
+    if excluded is not None and excluded.any():
+        dropped = int(excluded.sum())
+        activations = activations[~excluded]
     primed = int(np.sum(activations >= threshold))
     print('Primed (target unit activation >= {}): {} / {}'.format(
         threshold, primed, len(activations)))
+    if dropped:
+        print('Excluded {} item(s): {}.'.format(dropped, reason))
     print('Mean target activation: {:.6f}'.format(float(activations.mean())))
     return primed
 
@@ -305,10 +363,12 @@ def two_deck(corpus, mode, sub_mode=None, letter=None, batch_size=None):
     elif 2 <= mode <= 5:
         analytics.progress_printout(
             raw_inputs, decoded, transcribed, activations, len(activations))
-        report_false_positives(activations, NONWORD_THRESHOLD)
+        dropped, reason = excluded_items(corpus, mode, sub_mode)
+        report_false_positives(activations, NONWORD_THRESHOLD, dropped, reason)
     elif 6 <= mode <= 7:
-        report_priming(
-            raw_upper_output, priming_targets(corpus), PRIMING_THRESHOLD)
+        dropped, reason = excluded_items(corpus, mode, sub_mode)
+        report_priming(raw_upper_output, priming_targets(corpus),
+                       PRIMING_THRESHOLD, dropped, reason)
     elif mode == 8:
         report_letter_proximity(
             raw_inputs, decoded, raw_lower_output, len(lower_deck_mapping))
